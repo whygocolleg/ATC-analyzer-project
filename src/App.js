@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Map, Marker, NavigationControl, Source, Layer } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import YouTube from 'react-youtube';
+import TrainerMode from './components/TrainerMode';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 // ==================== 확장 가능한 사고 데이터 구조 ====================
@@ -108,6 +109,7 @@ const CONTAMINATION_LEVEL = {
 };
 
 function App() {
+  const [mode, setMode] = useState('replay'); // 'replay' | 'trainer'
   const [player, setPlayer] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(50);
@@ -314,24 +316,67 @@ function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a' }}>
-      
+
       {/* 상단 헤더 */}
-      <div style={{ height: '60px', background: 'linear-gradient(90deg, #1a1a1a 0%, #0a0a0a 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 30px', borderBottom: '2px solid #00ff00', boxShadow: '0 4px 20px rgba(0,255,0,0.3)' }}>
+      <div style={{ height: '60px', background: 'linear-gradient(90deg, #1a1a1a 0%, #0a0a0a 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 30px', borderBottom: '2px solid #00ff00', boxShadow: '0 4px 20px rgba(0,255,0,0.3)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <h1 style={{ fontSize: '22px', color: '#00ff00', margin: 0, fontWeight: 'bold', letterSpacing: '2px', textShadow: '0 0 5px rgba(0, 255, 0, 0.5)' }}>
+          <h1 style={{ fontSize: '20px', color: '#00ff00', margin: 0, fontWeight: 'bold', letterSpacing: '2px', textShadow: '0 0 5px rgba(0, 255, 0, 0.5)' }}>
             📡 ATC INCIDENT ANALYZER
           </h1>
-          <span style={{ fontSize: '14px', color: '#888', fontFamily: 'monospace' }}>
-            {INCIDENT_DATA.airport} | {INCIDENT_DATA.flightCallsign}
-          </span>
+          {mode === 'replay' && (
+            <span style={{ fontSize: '13px', color: '#666', fontFamily: 'monospace' }}>
+              {INCIDENT_DATA.airport} | {INCIDENT_DATA.flightCallsign}
+            </span>
+          )}
+          {mode === 'trainer' && (
+            <span style={{ fontSize: '13px', color: '#0088ff', fontFamily: 'monospace', letterSpacing: '1px' }}>
+              🎓 PILOT COMMUNICATION TRAINER
+            </span>
+          )}
         </div>
-        <div style={{ fontSize: '18px', color: '#00ff00', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 5px rgba(0, 255, 0, 0.5)' }}>
-          ⏱ {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
+
+        {/* Mode toggle + clock */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Mode switcher */}
+          <div style={{ display: 'flex', border: '2px solid #333', borderRadius: '6px', overflow: 'hidden' }}>
+            {[
+              { key: 'replay', label: '▶ INCIDENT REPLAY' },
+              { key: 'trainer', label: '🎓 AI TRAINER' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setMode(key)}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: mode === key ? '#00ff00' : '#111',
+                  color: mode === key ? '#000' : '#666',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  letterSpacing: '1px',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {mode === 'replay' && (
+            <div style={{ fontSize: '16px', color: '#00ff00', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 5px rgba(0, 255, 0, 0.5)' }}>
+              ⏱ {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* ── TRAINER MODE ── */}
+      {mode === 'trainer' && <TrainerMode />}
+
+      {/* ── REPLAY MODE (existing) ── */}
       {/* 경고 배너 */}
-      {is4RClosed && (
+      {mode === 'replay' && is4RClosed && (
         <div style={{ 
           height: '50px', 
           backgroundColor: '#ff0000', 
@@ -349,7 +394,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ flex: 1, display: 'flex', gap: '2px', backgroundColor: '#0a0a0a' }}>
+      <div style={{ flex: 1, display: mode === 'replay' ? 'flex' : 'none', gap: '2px', backgroundColor: '#0a0a0a' }}>
         
         {/* 왼쪽: 지도 */}
         <div style={{ flex: 3, position: 'relative', border: '2px solid #333' }}>
