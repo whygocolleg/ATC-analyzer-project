@@ -1,8 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Map, Marker, NavigationControl } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import {
   analyzeDialog,
+  fetchAnalyses,
+  fetchAnalysis,
+  deleteAnalysis,
+  fetchCategories,
+  searchAnalyses,
   getIncidentMarkerPositions,
   INCIDENT_COLORS,
   SEVERITY_COLORS,
@@ -64,7 +69,6 @@ function HighlightedDialog({ dialogText, incidents, selectedId, onSelect }) {
     );
   }
 
-  // Build sorted highlight spans
   const highlights = [];
   incidents.forEach((inc) => {
     if (!inc.dialogText) return;
@@ -75,7 +79,6 @@ function HighlightedDialog({ dialogText, incidents, selectedId, onSelect }) {
   });
   highlights.sort((a, b) => a.start - b.start);
 
-  // Build text segments
   const segments = [];
   let pos = 0;
   for (const h of highlights) {
@@ -115,6 +118,239 @@ function HighlightedDialog({ dialogText, incidents, selectedId, onSelect }) {
   );
 }
 
+// ── History Sidebar ─────────────────────────────────────────────────────────
+
+function HistorySidebar({ onLoadAnalysis, currentAnalysisId }) {
+  const [analyses, setAnalyses] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [analysesData, categoriesData] = await Promise.all([
+        fetchAnalyses(selectedCategory),
+        fetchCategories(),
+      ]);
+      setAnalyses(analysesData);
+      setCategories(categoriesData);
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Refresh when a new analysis is saved
+  useEffect(() => {
+    if (currentAnalysisId) loadData();
+  }, [currentAnalysisId, loadData]);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    try {
+      const results = await searchAnalyses(searchQuery);
+      setSearchResults(results);
+    } catch (err) {
+      console.error('Search failed:', err);
+    }
+  };
+
+  const handleDelete = async (id, e) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this analysis?')) return;
+    try {
+      await deleteAnalysis(id);
+      loadData();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
+
+  const displayList = searchResults || analyses;
+
+  return (
+    <div style={{
+      width: '280px',
+      flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      borderRight: '2px solid #222',
+      backgroundColor: '#0d0d0d',
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '12px 14px', borderBottom: '2px solid #222', backgroundColor: '#111' }}>
+        <h3 style={{ margin: '0 0 10px 0', color: '#00ff00', fontSize: '12px', fontFamily: 'monospace', letterSpacing: '2px' }}>
+          SAVED ANALYSES
+        </h3>
+
+        {/* Search */}
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+          <input
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (!e.target.value.trim()) setSearchResults(null);
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="Search..."
+            style={{
+              flex: 1,
+              padding: '6px 10px',
+              backgroundColor: '#1a1a1a',
+              color: '#ccc',
+              border: '1px solid #333',
+              borderRadius: '3px',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              outline: 'none',
+            }}
+          />
+          <button
+            onClick={handleSearch}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: '#222',
+              color: '#aaa',
+              border: '1px solid #333',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+            }}
+          >
+            Search
+          </button>
+        </div>
+
+        {/* Category filter chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          <button
+            onClick={() => { setSelectedCategory(null); setSearchResults(null); }}
+            style={{
+              padding: '3px 8px',
+              backgroundColor: !selectedCategory ? '#00ff00' : '#1a1a1a',
+              color: !selectedCategory ? '#000' : '#666',
+              border: `1px solid ${!selectedCategory ? '#00ff00' : '#333'}`,
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: '10px',
+              fontWeight: 'bold',
+            }}
+          >
+            ALL
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => { setSelectedCategory(cat.id); setSearchResults(null); }}
+              style={{
+                padding: '3px 8px',
+                backgroundColor: selectedCategory === cat.id ? cat.color : '#1a1a1a',
+                color: selectedCategory === cat.id ? '#000' : cat.color,
+                border: `1px solid ${selectedCategory === cat.id ? cat.color : '#333'}`,
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontFamily: 'monospace',
+                fontSize: '10px',
+                fontWeight: 'bold',
+              }}
+              title={cat.description}
+            >
+              {cat.icon} {cat.name} ({cat.analysis_count})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+        {loading && (
+          <div style={{ color: '#555', fontSize: '12px', fontFamily: 'monospace', textAlign: 'center', padding: '20px' }}>
+            Loading...
+          </div>
+        )}
+
+        {!loading && displayList.length === 0 && (
+          <div style={{ color: '#444', fontSize: '12px', fontFamily: 'monospace', textAlign: 'center', padding: '20px', lineHeight: 1.6 }}>
+            {searchResults !== null ? 'No results found' : 'No saved analyses yet.\nAnalyze a dialog to get started!'}
+          </div>
+        )}
+
+        {displayList.map(item => {
+          const isCurrent = currentAnalysisId === item.id;
+          const sevColor = SEVERITY_COLORS[item.overall_severity] || '#666';
+          return (
+            <div
+              key={item.id}
+              onClick={() => onLoadAnalysis(item.id)}
+              style={{
+                padding: '10px 12px',
+                marginBottom: '6px',
+                backgroundColor: isCurrent ? '#1a2a1a' : '#111',
+                border: `1px solid ${isCurrent ? '#00ff00' : '#222'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                <div style={{ color: '#ccc', fontSize: '12px', fontWeight: 'bold', lineHeight: 1.3, flex: 1, marginRight: '8px' }}>
+                  {item.title || item.summary?.slice(0, 60) || 'Untitled'}
+                </div>
+                <button
+                  onClick={(e) => handleDelete(item.id, e)}
+                  style={{
+                    padding: '2px 6px',
+                    backgroundColor: 'transparent',
+                    color: '#555',
+                    border: '1px solid #333',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    flexShrink: 0,
+                  }}
+                  title="Delete"
+                >
+                  x
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                {item.airport && <span style={badge('#4499ff', '9px')}>{item.airport}</span>}
+                {item.overall_severity && <span style={badge(sevColor, '9px')}>{item.overall_severity}</span>}
+                {item.incident_count > 0 && <span style={badge('#aaa', '9px')}>{item.incident_count} incidents</span>}
+              </div>
+
+              {item.category_name && (
+                <div style={{ fontSize: '10px', color: item.category_color || '#666', fontFamily: 'monospace' }}>
+                  {item.category_icon} {item.category_name}
+                </div>
+              )}
+
+              <div style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace', marginTop: '4px' }}>
+                {new Date(item.created_at + 'Z').toLocaleDateString()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 function TrainerMode() {
@@ -124,6 +360,8 @@ function TrainerMode() {
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [viewState, setViewState] = useState({ longitude: -73.7781, latitude: 40.6413, zoom: 13 });
+  const [currentAnalysisId, setCurrentAnalysisId] = useState(null);
+  const [savedNotice, setSavedNotice] = useState(null);
   const mapRef = useRef(null);
 
   const handleAnalyze = async () => {
@@ -132,6 +370,8 @@ function TrainerMode() {
     setError(null);
     setAnalysis(null);
     setSelectedId(null);
+    setCurrentAnalysisId(null);
+    setSavedNotice(null);
     try {
       const result = await analyzeDialog(dialogText);
       setAnalysis(result);
@@ -142,6 +382,37 @@ function TrainerMode() {
         mapRef.current?.flyTo({ center: [lng, lat], zoom, duration: 1500 });
       }
       if (result.incidents?.length > 0) setSelectedId(result.incidents[0].id);
+
+      // Track saved record
+      if (result._saved) {
+        setCurrentAnalysisId(result._saved.id);
+        setSavedNotice(`Saved: ${result._saved.title}`);
+        setTimeout(() => setSavedNotice(null), 4000);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLoadAnalysis = async (id) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const record = await fetchAnalysis(id);
+      const analysisData = record.analysis_json;
+      setDialogText(record.dialog_text);
+      setAnalysis(analysisData);
+      setCurrentAnalysisId(id);
+
+      if (analysisData.mapFocus?.coordinates) {
+        const { lat, lng } = analysisData.mapFocus.coordinates;
+        const zoom = analysisData.mapFocus.zoom || 13;
+        setViewState({ longitude: lng, latitude: lat, zoom });
+        mapRef.current?.flyTo({ center: [lng, lat], zoom, duration: 1500 });
+      }
+      if (analysisData.incidents?.length > 0) setSelectedId(analysisData.incidents[0].id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -154,6 +425,8 @@ function TrainerMode() {
     setError(null);
     setSelectedId(null);
     setDialogText('');
+    setCurrentAnalysisId(null);
+    setSavedNotice(null);
   };
 
   const selectedIncident = analysis?.incidents?.find((i) => i.id === selectedId);
@@ -166,16 +439,26 @@ function TrainerMode() {
 
   // ── Render ──
   return (
-    <div style={{ flex: 1, display: 'flex', gap: '2px', backgroundColor: '#0a0a0a', overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', backgroundColor: '#0a0a0a', overflow: 'hidden' }}>
+
+      {/* ── HISTORY SIDEBAR ── */}
+      <HistorySidebar onLoadAnalysis={handleLoadAnalysis} currentAnalysisId={currentAnalysisId} />
 
       {/* ── LEFT PANEL ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '2px solid #222', overflow: 'hidden' }}>
 
         {/* Left header */}
         <div style={{ padding: '12px 20px', borderBottom: '2px solid #222', backgroundColor: '#111', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <h3 style={{ margin: 0, color: '#00ff00', fontSize: '13px', fontFamily: 'monospace', letterSpacing: '2px' }}>
-            📝 ATC COMMUNICATION DIALOG
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h3 style={{ margin: 0, color: '#00ff00', fontSize: '13px', fontFamily: 'monospace', letterSpacing: '2px' }}>
+              ATC COMMUNICATION DIALOG
+            </h3>
+            {savedNotice && (
+              <span style={{ color: '#00ff00', fontSize: '11px', fontFamily: 'monospace', opacity: 0.8 }}>
+                {savedNotice}
+              </span>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {!analysis && !isLoading && (
               <button onClick={() => setDialogText(SAMPLE_DIALOG)} style={btnStyle('#1a1a1a', '#aaa')}>
@@ -184,7 +467,7 @@ function TrainerMode() {
             )}
             {analysis && (
               <button onClick={handleReset} style={btnStyle('#1a1a1a', '#aaa')}>
-                ↩ New Dialog
+                New Dialog
               </button>
             )}
             <button
@@ -192,7 +475,7 @@ function TrainerMode() {
               disabled={isLoading || !dialogText.trim()}
               style={btnStyle('#00ff00', '#000', !isLoading && dialogText.trim().length > 0)}
             >
-              {isLoading ? '⏳ Analyzing...' : '🔍 Analyze with Claude'}
+              {isLoading ? 'Analyzing...' : 'Analyze with Claude'}
             </button>
           </div>
         </div>
@@ -200,7 +483,7 @@ function TrainerMode() {
         {/* Error banner */}
         {error && (
           <div style={{ padding: '10px 20px', backgroundColor: '#1a0000', borderBottom: '2px solid #ff0000', color: '#ff5555', fontSize: '12px', fontFamily: 'monospace', flexShrink: 0 }}>
-            ⚠️ {error}
+            {error}
             <div style={{ color: '#666', marginTop: '4px', fontSize: '11px' }}>
               Make sure the backend is running: <strong>npm run start:server</strong>
             </div>
@@ -226,6 +509,7 @@ function TrainerMode() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 20px', gap: '10px', overflow: 'hidden' }}>
             <div style={{ color: '#555', fontSize: '12px', fontFamily: 'monospace' }}>
               Paste an ATC / pilot communication dialog and click "Analyze with Claude" to extract incidents and educational insights.
+              Results are automatically saved for later study.
             </div>
             <textarea
               value={dialogText}
@@ -256,12 +540,12 @@ function TrainerMode() {
             {/* Summary banner */}
             <div style={{ padding: '12px 20px', backgroundColor: '#0d0d0d', borderBottom: '2px solid #222', flexShrink: 0 }}>
               <div style={{ color: '#00ff00', fontSize: '11px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>
-                📋 SITUATION SUMMARY
+                SITUATION SUMMARY
               </div>
               <div style={{ color: '#ccc', fontSize: '13px', lineHeight: 1.5 }}>{analysis.summary}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
                 {analysis.aircraftCallsign && <span style={badge('#00ff00')}>✈️ {analysis.aircraftCallsign}</span>}
-                {analysis.airport && <span style={badge('#4499ff')}>🛬 {analysis.airport}</span>}
+                {analysis.airport && <span style={badge('#4499ff')}>{analysis.airport}</span>}
                 {analysis.phase && <span style={badge('#ffaa00')}>{analysis.phase}</span>}
                 {analysis.overallSeverity && (
                   <span style={badge(SEVERITY_COLORS[analysis.overallSeverity])}>
@@ -329,7 +613,7 @@ function TrainerMode() {
               {analysis.keyLessons?.length > 0 && (
                 <div style={{ marginTop: '20px', padding: '14px', border: '2px solid #00ff00', borderRadius: '6px', backgroundColor: '#001200' }}>
                   <div style={{ color: '#00ff00', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '10px' }}>
-                    🎓 KEY LESSONS
+                    KEY LESSONS
                   </div>
                   {analysis.keyLessons.map((lesson, i) => (
                     <div key={i} style={{ color: '#ccc', fontSize: '12px', marginBottom: '8px', lineHeight: 1.6 }}>
@@ -439,7 +723,7 @@ function TrainerMode() {
 
                   {/* Dialog reference */}
                   <div style={{ marginBottom: '14px' }}>
-                    <div style={{ color: '#444', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>📡 DIALOG REFERENCE</div>
+                    <div style={{ color: '#444', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>DIALOG REFERENCE</div>
                     <div style={{
                       color: color, fontSize: '12px', fontFamily: 'monospace',
                       backgroundColor: `${color}0f`, padding: '8px 12px',
@@ -451,20 +735,20 @@ function TrainerMode() {
 
                   {/* Description */}
                   <div style={{ marginBottom: '14px' }}>
-                    <div style={{ color: '#444', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>📋 DESCRIPTION</div>
+                    <div style={{ color: '#444', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>DESCRIPTION</div>
                     <div style={{ color: '#ccc', fontSize: '13px', lineHeight: 1.6 }}>{inc.description}</div>
                   </div>
 
                   {/* Educational note */}
                   <div style={{ marginBottom: '14px', padding: '12px', backgroundColor: '#001800', borderRadius: '6px', border: '1px solid #00ff0022' }}>
-                    <div style={{ color: '#00ff00', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>🎓 EDUCATIONAL NOTE</div>
+                    <div style={{ color: '#00ff00', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '6px' }}>EDUCATIONAL NOTE</div>
                     <div style={{ color: '#aaddbf', fontSize: '13px', lineHeight: 1.6 }}>{inc.educationalNote}</div>
                   </div>
 
                   {/* ATC best practice */}
                   {inc.atcBestPractice && (
                     <div style={{ marginBottom: '10px' }}>
-                      <div style={{ color: '#4499ff', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '5px' }}>🎙️ ATC BEST PRACTICE</div>
+                      <div style={{ color: '#4499ff', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '5px' }}>ATC BEST PRACTICE</div>
                       <div style={{ color: '#aabbdd', fontSize: '12px', lineHeight: 1.5 }}>{inc.atcBestPractice}</div>
                     </div>
                   )}
@@ -472,7 +756,7 @@ function TrainerMode() {
                   {/* Pilot best practice */}
                   {inc.pilotBestPractice && (
                     <div style={{ marginBottom: '10px' }}>
-                      <div style={{ color: '#ffaa00', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '5px' }}>✈️ PILOT BEST PRACTICE</div>
+                      <div style={{ color: '#ffaa00', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '5px' }}>PILOT BEST PRACTICE</div>
                       <div style={{ color: '#ddccaa', fontSize: '12px', lineHeight: 1.5 }}>{inc.pilotBestPractice}</div>
                     </div>
                   )}
@@ -480,7 +764,7 @@ function TrainerMode() {
                   {/* Regulation */}
                   {inc.relatedRegulation && (
                     <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#111100', borderRadius: '4px', border: '1px solid #ffff0022' }}>
-                      <div style={{ color: '#ffff00', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '4px' }}>📜 REGULATION</div>
+                      <div style={{ color: '#ffff00', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '2px', marginBottom: '4px' }}>REGULATION</div>
                       <div style={{ color: '#cccc88', fontSize: '12px', lineHeight: 1.5 }}>{inc.relatedRegulation}</div>
                     </div>
                   )}
@@ -494,7 +778,7 @@ function TrainerMode() {
         {analysis && !selectedIncident && analysis.communicationQuality && (
           <div style={{ flexShrink: 0, border: '2px solid #222', backgroundColor: '#0d0d0d', padding: '18px 20px' }}>
             <div style={{ color: '#00ff00', fontFamily: 'monospace', fontSize: '12px', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '14px' }}>
-              📡 COMMUNICATION QUALITY
+              COMMUNICATION QUALITY
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               {[
