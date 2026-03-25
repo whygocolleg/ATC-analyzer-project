@@ -1,0 +1,100 @@
+{
+  "videoId": "w5WMP494pgU",
+  "flightCallsign": "JBU2892",
+  "airport": "JFK",
+
+  "locations": [
+    { "id": "4L_F",    "name": "4L-F",          "lat": 40.64257, "lng": -73.76618 },
+    { "id": "4R_Y",    "name": "4R-Y",           "lat": 40.64758, "lng": -73.75833 },
+    { "id": "31R_E",   "name": "31R-E",          "lat": 40.64766, "lng": -73.76782 },
+    { "id": "4R_TH",   "name": "4R Threshold",   "lat": 40.62585, "lng": -73.77001 },
+    { "id": "FIRE_STN","name": "ARFF Station",   "lat": 40.65158, "lng": -73.78314 }
+  ],
+
+  "timeline": {
+    "planeApproach": 10,
+    "planeLanding":  40,
+    "planeLanded":   70,
+    "truckDispatch": 80,
+    "runwayClosure": 330
+  },
+
+  "flightPath": {
+    "initial":  { "lng": -73.78500, "lat": 40.61000 },
+    "approach": { "lng": -73.77001, "lat": 40.62585 },
+    "landing":  { "lng": -73.76618, "lat": 40.64257 }
+  },
+
+  "emergencyUnit": {
+    "startPos": { "lng": -73.78314, "lat": 40.65158 },
+    "targetPos": { "lng": -73.76618, "lat": 40.64257 }
+  },
+
+  "subtitles": [
+    { "time":  13,  "text": "JBU2892: Likely to declare an emergency." },
+    { "time":  21,  "text": "JBU2892: We have a massive fuel imbalance." },
+    { "time":  80,  "text": "TWR: Emergency equipment's on their way now." },
+    { "time": 114,  "text": "JBU2892: Check for any fuel leak on our left side." },
+    { "time": 157,  "text": "TWR: They're coming to the left side right now." },
+    { "time": 330,  "text": "ATC: Runway 4 Right will be closed due to contamination." }
+  ],
+
+  "runwayCenterline": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-73.77010724488446, 40.625749318504546],
+            [-73.75531349788288, 40.644750861539194]
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-73.75523644961586, 40.644790021958414],
+            [-73.75603177740095, 40.64651418475694],
+            [-73.75832069926795, 40.64768100644412]
+          ]
+        }
+      }
+    ]
+  },
+
+  "contaminationPath": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-73.77023895799424, 40.62575226265656],
+            [-73.76057412055097, 40.638253175876685],
+            [-73.76082624674459, 40.64003882956894],
+            [-73.76477622378694, 40.641760664678344]
+          ]
+        }
+      }
+    ]
+  },
+
+  "criticalEvents": [
+    { "id": 1, "time":  13, "label": "🚨 Emergency Declaration",   "color": "#ff0000" },
+    { "id": 2, "time":  40, "label": "🛬 Landing Sequence Start",   "color": "#ffaa00" },
+    { "id": 3, "time":  70, "label": "✅ Aircraft Landed",           "color": "#00ff00" },
+    { "id": 4, "time":  80, "label": "🚒 ARFF Dispatch",            "color": "#ff6600" },
+    { "id": 5, "time": 330, "label": "🔴 Runway 4R Closure",        "color": "#ff0000" }
+  ],
+
+  "contaminationLevels": {
+    "MINOR":    { "width": 15, "opacity": 0.4, "color": "#ffff00" },
+    "MODERATE": { "width": 20, "opacity": 0.6, "color": "#ffaa00" },
+    "SEVERE":   { "width": 30, "opacity": 0.8, "color": "#ff6600" }
+  }
+}
