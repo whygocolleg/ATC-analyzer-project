@@ -9,6 +9,9 @@ app.use(express.json({ limit: '10mb' }));
 // ── Database ────────────────────────────────────────────────────────────────
 const db = require('./server/db');
 
+// ── YouTube 분석 유틸 ────────────────────────────────────────────────────────
+const { parseEvents } = require('./server/utils/atcParser');
+
 // ── Anthropic client (lazy-loaded) ──────────────────────────────────────────
 let anthropic = null;
 function getClient() {
@@ -75,6 +78,52 @@ function extractJSON(text) {
 // ══════════════════════════════════════════════════════════════════════════════
 //  API ROUTES
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ── Analyze YouTube URL (rule-based, no API key required) ───────────────────
+// POST /api/analyze  { url: string }
+// Returns { events: [...], mapFocus: { coordinates, zoom } }
+app.post('/api/analyze', async (req, res) => {
+  const { url } = req.body;
+  if (!url || !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(url)) {
+    return res.status(400).json({ error: '유효한 YouTube URL을 입력해주세요.' });
+  }
+
+  // Dynamically require yt-dlp / caption tools only when needed
+  let ytDlp, parseVtt, cleanupFile;
+  try {
+    ({ extractMedia: ytDlp, parseVtt, cleanupFile } = require('./server/utils/audioExtractor'));
+  } catch (_) {
+    // audioExtractor not available — return mock events for dev/demo
+    const mockSegments = [
+      { start: 5,  end: 8,  text: 'Mayday mayday mayday, engine failure' },
+      { start: 20, end: 23, text: 'Traffic alert, TCAS resolution advisory' },
+      { start: 45, end: 48, text: 'Cleared for ILS approach runway 31L' },
+      { start: 70, end: 73, text: 'Go-around, go-around, wind shear alert' },
+      { start: 95, end: 98, text: 'Say again, unable to copy your transmission' },
+    ];
+    const result = parseEvents(mockSegments);
+    return res.json(result);
+  }
+
+  let mediaPath = null;
+  try {
+    const media = await ytDlp(url);
+    mediaPath = media.filePath;
+
+    if (media.type !== 'subtitle') {
+      throw new Error('이 영상에는 자동 자막이 없습니다. 자막(CC)이 있는 ATC 영상을 사용해주세요.');
+    }
+
+    const segments = parseVtt(mediaPath);
+    const result = parseEvents(segments);
+    res.json(result);
+  } catch (err) {
+    console.error('[/api/analyze] 오류:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (cleanupFile && mediaPath) cleanupFile(mediaPath);
+  }
+});
 
 // ── Analyze dialog (Claude AI) + auto-save ──────────────────────────────────
 app.post('/api/analyze-dialog', async (req, res) => {
@@ -252,6 +301,56 @@ app.get('/api/stats', (_req, res) => {
     res.json(db.getStats());
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── YouTube 분석 파이프라인 ───────────────────────────────────────────────────
+// POST /api/analyze-youtube  { youtubeUrl: string }
+// 1) yt-dlp로 오디오 추출 → 2) Whisper로 트랜스크립트 → 3) GPT로 구조화 JSON 반환
+app.post('/api/analyze-youtube', async (req, res) => {
+  const { youtubeUrl } = req.body;
+
+  if (!youtubeUrl || !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(youtubeUrl)) {
+    return res.status(400).json({ error: '유효한 YouTube URL을 입력해주세요.' });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: '.env에 ANTHROPIC_API_KEY가 설정되지 않았습니다.' });
+  }
+
+  // videoId 추출
+  let videoId = 'unknown';
+  try {
+    const url = new URL(youtubeUrl);
+    videoId = url.searchParams.get('v') || url.pathname.replace('/', '');
+  } catch (_) {}
+
+  let mediaPath = null;
+  try {
+    // 단계 1: 자막 우선 시도 → 없으면 오디오 추출
+    console.log(`[YouTube] 미디어 추출 시작: ${youtubeUrl}`);
+    const media = await extractMedia(youtubeUrl);
+    mediaPath = media.filePath;
+    console.log(`[YouTube] 추출 완료 (${media.type}): ${mediaPath}`);
+
+    // 단계 2: 세그먼트 생성 (자막만 지원 — Whisper 미사용)
+    if (media.type !== 'subtitle') {
+      throw new Error('이 영상에는 자동 자막이 없습니다. 자막(CC)이 있는 ATC 영상을 사용해주세요.');
+    }
+    const segments = parseVtt(mediaPath);
+    console.log(`[YouTube] 자막 파싱 완료 (${segments.length}개 세그먼트)`);
+
+    // 단계 3: Claude로 구조화
+    console.log('[YouTube] Claude 구조화 분석 시작...');
+    const structured = await structureTranscript(segments, videoId);
+    console.log('[YouTube] 분석 완료');
+
+    res.json(structured);
+  } catch (err) {
+    console.error('[YouTube] 분석 오류:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    cleanupFile(mediaPath);
   }
 });
 

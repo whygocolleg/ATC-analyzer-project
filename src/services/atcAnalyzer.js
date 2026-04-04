@@ -1,174 +1,128 @@
-const API_BASE = 'http://localhost:3001';
+/**
+ * Phase 3 — Rule-based ATC 이벤트 감지 엔진
+ * API 키 없음, 100% 로컬 실행
+ */
+
+const RULES = [
+  // ── 비상 ────────────────────────────────────────────────
+  {
+    id: 'MAYDAY',
+    pattern: /\bmayday\b/i,
+    severity: 'HIGH',
+    label: '비상 선언 (MAYDAY)',
+    color: '#e53935',
+  },
+  {
+    id: 'PAN_PAN',
+    pattern: /\bpan[\s-]pan\b/i,
+    severity: 'HIGH',
+    label: '긴급 상황 (PAN-PAN)',
+    color: '#e53935',
+  },
+  {
+    id: 'EMERGENCY',
+    pattern: /\bdeclaring\s+(?:an\s+)?emergency\b|\bemergency\b/i,
+    severity: 'HIGH',
+    label: '비상 상황',
+    color: '#e53935',
+  },
+  // ── 복행 / 중단 ─────────────────────────────────────────
+  {
+    id: 'GO_AROUND',
+    pattern: /\bgo[\s-]around\b/i,
+    severity: 'MEDIUM',
+    label: '복행 (Go-Around)',
+    color: '#f59e0b',
+  },
+  {
+    id: 'ABORT',
+    pattern: /\babort(?:ed|ing)?\b|\bstop\s+immediately\b/i,
+    severity: 'MEDIUM',
+    label: '이륙 중단',
+    color: '#f59e0b',
+  },
+  // ── 활주로 관련 ──────────────────────────────────────────
+  {
+    id: 'RUNWAY_INCURSION',
+    pattern: /\bstop\b.*\brunway\b|\brunway\b.*\bincursion\b|\bholdshort\b|\bhold\s+short\b/i,
+    severity: 'HIGH',
+    label: '활주로 침범 경고',
+    color: '#e53935',
+  },
+  {
+    id: 'CLEARED_LAND',
+    pattern: /\bcleared\s+to\s+land\b/i,
+    severity: 'LOW',
+    label: '착륙 허가',
+    color: '#22c55e',
+  },
+  {
+    id: 'CLEARED_TAKEOFF',
+    pattern: /\bcleared\s+for\s+takeoff\b/i,
+    severity: 'LOW',
+    label: '이륙 허가',
+    color: '#22c55e',
+  },
+  // ── 기상 ────────────────────────────────────────────────
+  {
+    id: 'WIND_SHEAR',
+    pattern: /\bwind\s*shear\b/i,
+    severity: 'HIGH',
+    label: '윈드 시어',
+    color: '#e53935',
+  },
+  {
+    id: 'LOW_VISIBILITY',
+    pattern: /\blow\s+visibility\b|\bzero[\s-]zero\b/i,
+    severity: 'MEDIUM',
+    label: '저시정',
+    color: '#f59e0b',
+  },
+  // ── 교신 오류 ────────────────────────────────────────────
+  {
+    id: 'WRONG_FREQ',
+    pattern: /\bwrong\s+frequency\b|\bsay\s+again\b.*\btimes\b/i,
+    severity: 'MEDIUM',
+    label: '교신 오류',
+    color: '#f59e0b',
+  },
+  {
+    id: 'READBACK_ERROR',
+    pattern: /\bnegative\s+readback\b|\bincorrect\s+readback\b/i,
+    severity: 'MEDIUM',
+    label: '리드백 오류',
+    color: '#f59e0b',
+  },
+  // ── 연료 ────────────────────────────────────────────────
+  {
+    id: 'FUEL',
+    pattern: /\bfuel\s+(?:imbalance|emergency|low|critical|leak)\b/i,
+    severity: 'HIGH',
+    label: '연료 이상',
+    color: '#e53935',
+  },
+];
 
 /**
- * Send an ATC dialog to the backend for Claude-powered analysis.
- * Results are automatically saved to the database.
+ * 세그먼트 배열을 분석하여 이벤트를 감지합니다.
+ * @param {Array<{start, end, text}>} segments
+ * @returns {Array<{...segment, events: Array}>}
  */
-export async function analyzeDialog(dialogText, { sourceUrl, sourceType, title, categoryId } = {}) {
-  const response = await fetch(`${API_BASE}/api/analyze-dialog`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dialog: dialogText, sourceUrl, sourceType, title, categoryId }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || `Server error ${response.status}`);
-  }
-
-  return data;
-}
-
-/**
- * Fetch all saved analyses (optionally filtered by category).
- */
-export async function fetchAnalyses(categoryId) {
-  const url = categoryId
-    ? `${API_BASE}/api/analyses?category=${categoryId}`
-    : `${API_BASE}/api/analyses`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Failed to fetch analyses');
-  return response.json();
-}
-
-/**
- * Fetch a single analysis with full data.
- */
-export async function fetchAnalysis(id) {
-  const response = await fetch(`${API_BASE}/api/analyses/${id}`);
-  if (!response.ok) throw new Error('Analysis not found');
-  return response.json();
-}
-
-/**
- * Delete a saved analysis.
- */
-export async function deleteAnalysis(id) {
-  const response = await fetch(`${API_BASE}/api/analyses/${id}`, { method: 'DELETE' });
-  if (!response.ok) throw new Error('Failed to delete');
-  return response.json();
-}
-
-/**
- * Update the category of an analysis.
- */
-export async function updateAnalysisCategory(id, categoryId) {
-  const response = await fetch(`${API_BASE}/api/analyses/${id}/category`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ categoryId }),
-  });
-  if (!response.ok) throw new Error('Failed to update category');
-  return response.json();
-}
-
-/**
- * Search analyses by keyword.
- */
-export async function searchAnalyses(query) {
-  const response = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}`);
-  if (!response.ok) throw new Error('Search failed');
-  return response.json();
-}
-
-/**
- * Fetch all categories.
- */
-export async function fetchCategories() {
-  const response = await fetch(`${API_BASE}/api/categories`);
-  if (!response.ok) throw new Error('Failed to fetch categories');
-  return response.json();
-}
-
-/**
- * Create a new category.
- */
-export async function createCategory({ name, description, icon, color }) {
-  const response = await fetch(`${API_BASE}/api/categories`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, description, icon, color }),
-  });
-  if (!response.ok) throw new Error('Failed to create category');
-  return response.json();
-}
-
-/**
- * Save study progress for an analysis.
- */
-export async function saveStudyProgress(analysisId, { completed, notes, rating }) {
-  const response = await fetch(`${API_BASE}/api/analyses/${analysisId}/progress`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ completed, notes, rating }),
-  });
-  if (!response.ok) throw new Error('Failed to save progress');
-  return response.json();
-}
-
-/**
- * Fetch dashboard stats.
- */
-export async function fetchStats() {
-  const response = await fetch(`${API_BASE}/api/stats`);
-  if (!response.ok) throw new Error('Failed to fetch stats');
-  return response.json();
-}
-
-/**
- * Known airport coordinates for map centering.
- */
-export const AIRPORT_COORDS = {
-  KJFK: { lat: 40.6413, lng: -73.7781, zoom: 13 },
-  KLAX: { lat: 33.9425, lng: -118.4081, zoom: 13 },
-  KORD: { lat: 41.9742, lng: -87.9073, zoom: 13 },
-  KATL: { lat: 33.6407, lng: -84.4277, zoom: 13 },
-  KSFO: { lat: 37.6213, lng: -122.379, zoom: 13 },
-  KDFW: { lat: 32.8998, lng: -97.0403, zoom: 13 },
-  KDEN: { lat: 39.8561, lng: -104.6737, zoom: 13 },
-  KSEA: { lat: 47.4502, lng: -122.3088, zoom: 13 },
-  KMIA: { lat: 25.7959, lng: -80.287, zoom: 13 },
-  KBOS: { lat: 42.3656, lng: -71.0096, zoom: 13 },
-  JFK: { lat: 40.6413, lng: -73.7781, zoom: 13 },
-  LAX: { lat: 33.9425, lng: -118.4081, zoom: 13 },
-  ORD: { lat: 41.9742, lng: -87.9073, zoom: 13 },
-};
-
-/**
- * Color mapping by incident type.
- */
-export const INCIDENT_COLORS = {
-  EMERGENCY_DECLARATION: '#ff2222',
-  RUNWAY_INCURSION: '#ff6600',
-  RUNWAY_CLOSURE: '#ff8800',
-  FUEL_ISSUE: '#ff00cc',
-  EQUIPMENT_FAILURE: '#888888',
-  COMMUNICATION_ERROR: '#4499ff',
-  WEATHER_DEVIATION: '#00aaff',
-  SEPARATION_ISSUE: '#ffee00',
-  MEDICAL_EMERGENCY: '#ff0077',
-  UNAUTHORIZED_ENTRY: '#ff4400',
-  OTHER: '#00ffaa',
-};
-
-export const SEVERITY_COLORS = {
-  HIGH: '#ff3333',
-  MEDIUM: '#ffaa00',
-  LOW: '#00dd00',
-};
-
-/**
- * Place incident markers in a circle around the airport center.
- */
-export function getIncidentMarkerPositions(incidents, centerLat, centerLng) {
-  const radius = 0.004;
-  return incidents.map((incident, i) => {
-    const angle = (2 * Math.PI * i) / incidents.length - Math.PI / 2;
+export function analyzeSegments(segments) {
+  return segments.map(seg => {
+    const matched = RULES.filter(rule => rule.pattern.test(seg.text));
     return {
-      ...incident,
-      markerLat: centerLat + radius * Math.cos(angle),
-      markerLng: centerLng + radius * Math.sin(angle),
+      ...seg,
+      events: matched,
+      hasIncident: matched.some(e => e.severity === 'HIGH'),
+      hasWarning: matched.some(e => e.severity === 'MEDIUM'),
     };
   });
+}
+
+/**
+ * 분석된 세그먼트에서 HIGH/MEDIUM 이벤트만 추출합니다.
+ */
+export function extractIncidents(analyzed) {
+  return analyzed.filter(s => s.hasIncident || s.hasWarning);
 }

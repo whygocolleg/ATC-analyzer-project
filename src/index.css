@@ -1,13 +1,56 @@
-body {
+/* ── Safety First Design System — Dark Navy Premium ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --navy:          #0d1b3e;
+  --navy-light:    #1a2d5a;
+  --navy-mid:      #243d73;
+  --accent-red:    #e53935;
+  --accent-amber:  #f59e0b;
+  --accent-green:  #22c55e;
+  --accent-blue:   #3b82f6;
+  --text-primary:  #f0f4ff;
+  --text-secondary:#8ba3cc;
+  --text-muted:    #4e6590;
+  --border:        #243d73;
+  --border-light:  #1e3460;
+  --card-bg:       #162447;
+  --input-bg:      #0f1e3a;
+  --shadow:        0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--navy);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--navy); }
+::-webkit-scrollbar-thumb { background: var(--navy-mid); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+/* ── Typography ── */
+h1, h2, h3, h4 { font-weight: 600; letter-spacing: 0.02em; }
+
+/* ── Utility ── */
+.text-muted   { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-red     { color: var(--accent-red); }
+.text-amber   { color: var(--accent-amber); }
+.text-green   { color: var(--accent-green); }
