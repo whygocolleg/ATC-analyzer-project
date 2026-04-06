@@ -2,7 +2,7 @@
  * MapView — Full-screen Mapbox GL base map
  * Uses react-map-gl v7
  */
-import { useRef, useCallback } from 'react';
+import { useCallback } from 'react';
 import Map, { Marker, Popup, NavigationControl } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
