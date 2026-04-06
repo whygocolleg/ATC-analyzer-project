@@ -8,6 +8,6 @@
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "env": {
-    "REACT_APP_MAPBOX_TOKEN": "@react_app_mapbox_token"
+    "REACT_APP_MAPBOX_TOKEN_NEW": "@react_app_mapbox_token_new"
   }
 }

@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 import Map, { Marker, Popup, NavigationControl } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN_NEW;
 
 const SEVERITY_COLOR = {
   HIGH: '#ef4444',
