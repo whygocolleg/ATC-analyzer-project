@@ -5,7 +5,7 @@ import UrlInput from './components/UrlInput';
 import EventBadge from './components/EventBadge';
 import './App.css';
 
-const API = 'http://localhost:3001';
+const API = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001';
 const SYNC_WINDOW = 2; // seconds
 
 export default function App() {
