@@ -3,7 +3,7 @@
  * Uses react-map-gl v7
  */
 import { useCallback } from 'react';
-import Map, { Marker, Popup, NavigationControl } from 'react-map-gl';
+import Map, { Marker, Popup, NavigationControl, Source } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN_NEW;
@@ -26,11 +26,25 @@ export default function MapView({ events = [], activeEvent, onEventClick, mapRef
   return (
     <Map
       ref={mapRef}
-      initialViewState={{ longitude: -87.9, latitude: 41.98, zoom: 9 }}
+      initialViewState={{ 
+        longitude: -87.9, 
+        latitude: 41.98, 
+        zoom: 12, // Increased zoom for better 3D feel
+        pitch: 60, // Tilted view for 3D effect
+        bearing: -20
+      }}
       style={{ width: '100%', height: '100%' }}
-      mapStyle="mapbox://styles/mapbox/dark-v11"
+      mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
       mapboxAccessToken={MAPBOX_TOKEN}
+      terrain={{ source: 'mapbox-dem', exaggeration: 1.5 }}
     >
+      <Source
+        id="mapbox-dem"
+        type="raster-dem"
+        url="mapbox://mapbox.mapbox-terrain-dem-v1"
+        tileSize={512}
+        maxzoom={14}
+      />
       <NavigationControl position="bottom-left" />
 
       {geoEvents.map((evt) => (
