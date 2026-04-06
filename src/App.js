@@ -11,7 +11,7 @@ const SYNC_WINDOW = 2; // seconds
 export default function App() {
   const [videoUrl, setVideoUrl] = useState('');
   const [events, setEvents] = useState([]);
-  const [mapFocus, setMapFocus] = useState(null);
+
   const [activeEvent, setActiveEvent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,7 +37,6 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || 'Server error');
       const evts = data.events || [];
       setEvents(evts);
-      setMapFocus(data.mapFocus || null);
 
       // Fly to the first known coordinate immediately after analysis
       const firstGeo = evts.find(e => e.lat != null && e.lng != null);
@@ -64,25 +63,10 @@ export default function App() {
 
     if (match) {
       setActiveEvent(match);
-
-      // Use match coords, else fall back to first event with coords, else mapFocus
-      const coord = (match.lat != null)
-        ? { lat: match.lat, lng: match.lng }
-        : events.find(e => e.lat != null)
-          ? { lat: events.find(e => e.lat != null).lat, lng: events.find(e => e.lat != null).lng }
-          : mapFocus?.coordinates ?? null;
-
-      if (coord && mapRef.current) {
-        mapRef.current.flyTo({
-          center: [coord.lng, coord.lat],
-          zoom: match.lat != null ? 12 : 10,
-          duration: 1500,
-        });
-      }
     } else {
       setActiveEvent(null);
     }
-  }, [events, mapFocus]);
+  }, [events]);
 
   const severityCounts = events.reduce((acc, e) => {
     acc[e.severity] = (acc[e.severity] || 0) + 1;

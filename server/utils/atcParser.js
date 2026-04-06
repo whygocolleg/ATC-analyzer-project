@@ -183,6 +183,40 @@ const RULES = [
   },
 ];
 
+// ── Flight phase detection ───────────────────────────────────────────────────
+function detectFlightPhase(text, ruleId) {
+  if (ruleId === 'EMERGENCY_DECLARATION') return 'EMERGENCY';
+  if (ruleId === 'GO_AROUND')             return 'GO_AROUND';
+  if (/cleared.*take.?off|line.?up.*wait|position.*hold/i.test(text)) return 'TAKEOFF';
+  if (/take.?off roll|rotate\b|v1\b|vr\b/i.test(text))               return 'TAKEOFF';
+  if (/cleared.*(?:ils|rnav|rnp|approach)|established.*(?:ils|loc)/i.test(text)) return 'APPROACH';
+  if (/cleared.*land|short.*final|on.*final/i.test(text))             return 'LANDING';
+  if (/touch.?down|landed|vacate/i.test(text))                        return 'LANDING';
+  if (/climb|maintain.*(?:flight level|fl\s*\d|feet|ft\b)/i.test(text)) return 'AIRBORNE';
+  if (/descend|descending|passing.*\d{3}/i.test(text))                return 'DESCENDING';
+  if (/taxi|pushback|gate|apron|ground.*control/i.test(text))         return 'TAXI';
+  return 'GROUND';
+}
+
+// ── Vehicle detection ────────────────────────────────────────────────────────
+function detectVehicles(text) {
+  const v = ['aircraft'];
+  if (/fire.?(?:truck|engine|crew|dept)|arff|crash.*fire|foam/i.test(text)) v.push('fire_truck');
+  if (/ambulance|medical|paramedic|medevac/i.test(text))               v.push('ambulance');
+  if (/police|security|law enforcement/i.test(text))                   v.push('police');
+  return v;
+}
+
+// ── Runway heading extraction ─────────────────────────────────────────────────
+function detectRunwayHeading(text) {
+  const m = text.match(/runway\s+(\d{1,2})[LRC]?/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (n >= 1 && n <= 36) return n * 10;
+  }
+  return 315; // default NW
+}
+
 // ── Airport detection from text ──────────────────────────────────────────────
 function detectAirport(text) {
   const lower = text.toLowerCase();
@@ -239,6 +273,9 @@ function parseEvents(segments) {
         description: text.length > 150 ? text.slice(0, 147) + '…' : text,
         lat: segAirport.lat,
         lng: segAirport.lng,
+        flightPhase: detectFlightPhase(text, rule.id),
+        vehicles: detectVehicles(text),
+        runwayHeading: detectRunwayHeading(text),
       });
 
       // Only emit one event per segment (highest-priority rule wins)
